@@ -167,7 +167,9 @@
           <div class="flex-1 min-w-0">
             <label class="block text-[10px] font-medium text-slate-500 mb-0.5 px-0.5">DDL时间</label>
             <input id="task-deadline" type="datetime-local" 
-                   class="w-full px-2 py-1.5 border border-slate-200 focus:border-indigo-400 focus:ring-1 focus:ring-indigo-200 rounded-lg text-xs outline-none text-slate-700">
+                   class="w-full px-2 py-1.5 border border-slate-200 focus:border-indigo-400 focus:ring-1 focus:ring-indigo-200 rounded-lg text-xs outline-none text-slate-700"
+                   onchange="updateHolidayHint()" oninput="updateHolidayHint()">
+            <div id="ddl-holiday-hint" class="text-[9px] mt-0.5 min-h-[12px] text-red-500 font-medium"></div>
           </div>
           
           <!-- Recurring -->
@@ -507,6 +509,59 @@
       return new Date(y, m - 1, d);
     }
 
+    // 节假日数据（可扩展，支持更多年份）
+    const HOLIDAYS = {
+      // 2026 示例（可根据实际调整）
+      '2026-01-01': '元旦',
+      '2026-01-02': '元旦',
+      '2026-01-03': '元旦',
+      // 春节（示例，实际以官方为准）
+      '2026-02-16': '春节',
+      '2026-02-17': '春节',
+      '2026-02-18': '春节',
+      '2026-02-19': '春节',
+      '2026-02-20': '春节',
+      '2026-02-21': '春节',
+      '2026-02-22': '春节',
+      // 劳动节
+      '2026-05-01': '劳动节',
+      '2026-05-02': '劳动节',
+      '2026-05-03': '劳动节',
+      '2026-05-04': '劳动节',
+      '2026-05-05': '劳动节',
+      // 端午节（示例）
+      '2026-06-19': '端午节',
+      '2026-06-20': '端午节',
+      // 国庆节
+      '2026-10-01': '国庆节',
+      '2026-10-02': '国庆节',
+      '2026-10-03': '国庆节',
+      '2026-10-04': '国庆节',
+      '2026-10-05': '国庆节',
+      '2026-10-06': '国庆节',
+      '2026-10-07': '国庆节',
+      // 中秋等可继续添加
+    };
+
+    function getHolidayName(dateStr) {
+      if (!dateStr) return null;
+      const datePart = dateStr.split('T')[0];
+      return HOLIDAYS[datePart] || null;
+    }
+
+    function updateHolidayHint() {
+      const input = document.getElementById('task-deadline');
+      const hint = document.getElementById('ddl-holiday-hint');
+      if (!input || !hint) return;
+      const holiday = getHolidayName(input.value);
+      if (holiday) {
+        hint.innerHTML = `🎉 ${holiday}`;
+        hint.className = 'text-[9px] mt-0.5 min-h-[12px] text-red-500 font-medium';
+      } else {
+        hint.innerHTML = '';
+      }
+    }
+
     function setFilter(filter) {
       currentFilter = filter;
       
@@ -583,8 +638,10 @@
       }
 
       filtered.forEach(task => {
-        const isToday = task.deadline === getTodayStr();
-        const isOver = task.deadline < getTodayStr();
+        const taskDate = task.deadline.split('T')[0];
+        const todayDate = getTodayStr();
+        const isToday = taskDate === todayDate;
+        const isOver = task.deadline < getNowStr();
         
         const rel = getRelativeLabel(task);
         
@@ -610,11 +667,15 @@
                 </span>` : ''}
             </div>
             
-            <div class="mt-0.5 flex items-center gap-x-1 text-xs">
+            <div class="mt-0.5 flex items-center gap-x-1 text-xs flex-wrap">
               <span class="text-slate-500">${formatDate(task.deadline)}</span>
               <span class="text-[10px] px-1.5 py-px rounded ${rel.color} font-medium">
                 ${rel.text}
               </span>
+              ${(() => {
+                const h = getHolidayName(task.deadline);
+                return h ? `<span class="text-[9px] px-1 py-px bg-red-100 text-red-600 rounded font-medium ml-1">🎉${h}</span>` : '';
+              })()}
             </div>
           </div>
           
@@ -673,6 +734,7 @@
             <i class="fa-solid fa-check text-emerald-500 fa-xs"></i>
             <span class="line-through text-slate-400">${escapeHtml(task.title)}</span>
             <span class="ml-auto text-[10px] text-slate-400">${formatDate(task.deadline)}</span>
+            ${(() => { const h = getHolidayName(task.deadline); return h ? ` <span class="text-[9px] text-red-400">🎉${h}</span>` : ''; })()}
           </div>
           <div class="flex gap-x-1">
             <button onclick="restoreTask('${task.id}')"
@@ -744,6 +806,7 @@
       document.getElementById('task-title').value = task.title;
       document.getElementById('task-deadline').value = task.deadline;
       document.getElementById('task-recurring').checked = task.recurring;
+      updateHolidayHint();
       
       // Update UI for editing mode
       document.getElementById('form-title').innerHTML = '<i class="fa-solid fa-edit text-indigo-600 mr-2"></i>编辑任务';
@@ -826,6 +889,7 @@
       titleInput.value = '';
       deadlineInput.value = '';
       recurringInput.checked = false;
+      updateHolidayHint();
       
       // Reset form labels
       document.getElementById('form-title').innerHTML = '<i class="fa-solid fa-plus-circle text-indigo-600 mr-1"></i>新建任务';
@@ -913,6 +977,8 @@
         const min = String(now.getMinutes()).padStart(2, '0');
         dateInput.value = `${y}-${m}-${d}T${h}:${min}`;
       }
+      // 初始显示节假日提示
+      updateHolidayHint();
       
       // Also allow pressing Enter in title to submit
       const titleInput = document.getElementById('task-title');
