@@ -1,5 +1,6 @@
 import os
 import sys
+import json
 
 try:
     import webview
@@ -26,6 +27,41 @@ def toggle_on_top():
         win.on_top = not win.on_top
         return win.on_top
     return False
+
+
+# ==================== 本地文件存储（JSON） ====================
+def get_tasks_file():
+    """获取任务 JSON 文件路径（Windows AppData 目录，更可靠）"""
+    appdata = os.environ.get('APPDATA') or os.path.expanduser('~')
+    data_dir = os.path.join(appdata, '任务计划')
+    os.makedirs(data_dir, exist_ok=True)
+    return os.path.join(data_dir, 'tasks.json')
+
+
+def load_tasks():
+    """从本地 JSON 文件加载任务，返回列表或 None（给 JS 调用）"""
+    path = get_tasks_file()
+    if not os.path.exists(path):
+        return None
+    try:
+        with open(path, 'r', encoding='utf-8') as f:
+            data = json.load(f)
+            return data if isinstance(data, list) else None
+    except Exception as e:
+        print(f"加载任务失败: {e}")
+        return None
+
+
+def save_tasks(tasks):
+    """将任务列表保存到本地 JSON 文件，返回是否成功（给 JS 调用）"""
+    path = get_tasks_file()
+    try:
+        with open(path, 'w', encoding='utf-8') as f:
+            json.dump(tasks, f, ensure_ascii=False, indent=2)
+        return True
+    except Exception as e:
+        print(f"保存任务失败: {e}")
+        return False
 
 def create_app():
     # 确保能找到 index.html
@@ -55,6 +91,8 @@ def create_app():
     window.expose(close_window)
     window.expose(minimize_window)
     window.expose(toggle_on_top)
+    window.expose(load_tasks)
+    window.expose(save_tasks)
     
     # debug=False 上线用，开发时可改为 True 右键菜单检查元素
     webview.start(debug=False)

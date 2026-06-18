@@ -295,7 +295,59 @@
 
     const STORAGE_KEY = 'task-planner-tasks';
 
-    function loadTasks() {
+    // 使用本地 JSON 文件存储（比 localStorage 更可靠）
+    async function loadTasks() {
+      // 桌面版（pywebview）：优先使用 Python 提供的文件存储
+      if (window.pywebview && window.pywebview.api && window.pywebview.api.load_tasks) {
+        try {
+          let data = await window.pywebview.api.load_tasks();
+
+          // 迁移：如果文件里没有数据，但 localStorage 有，则迁移一次
+          if (!data || !Array.isArray(data) || data.length === 0) {
+            const local = localStorage.getItem(STORAGE_KEY);
+            if (local) {
+              try {
+                const parsed = JSON.parse(local);
+                if (Array.isArray(parsed) && parsed.length > 0) {
+                  data = parsed;
+                  await window.pywebview.api.save_tasks(data);
+                  localStorage.removeItem(STORAGE_KEY); // 清理旧数据
+                }
+              } catch (e) {}
+            }
+          }
+
+          if (data && Array.isArray(data) && data.length > 0) {
+            tasks = data;
+            return;
+          }
+
+          // 首次使用：生成示例任务
+          const today = new Date();
+          tasks = [
+            {
+              id: generateId(),
+              title: '写周报',
+              deadline: today.toISOString().split('T')[0],
+              recurring: false,
+              completed: false
+            },
+            {
+              id: generateId(),
+              title: '喝水 2000ml',
+              deadline: today.toISOString().split('T')[0],
+              recurring: true,
+              completed: false
+            }
+          ];
+          await window.pywebview.api.save_tasks(tasks);
+          return;
+        } catch (e) {
+          console.warn('从文件加载任务失败，使用内存', e);
+        }
+      }
+
+      // 浏览器回退（直接在浏览器打开 index.html 时使用）
       const saved = localStorage.getItem(STORAGE_KEY);
       if (saved) {
         try {
@@ -304,11 +356,8 @@
           tasks = [];
         }
       } else {
-        // First time: add 2 sample tasks
+        // First time sample tasks (浏览器模式)
         const today = new Date();
-        const tomorrow = new Date(today);
-        tomorrow.setDate(tomorrow.getDate() + 1);
-        
         tasks = [
           {
             id: generateId(),
@@ -325,11 +374,20 @@
             completed: false
           }
         ];
-        saveTasks();
+        localStorage.setItem(STORAGE_KEY, JSON.stringify(tasks));
       }
     }
 
     function saveTasks() {
+      // 桌面版：保存到本地 JSON 文件
+      if (window.pywebview && window.pywebview.api && window.pywebview.api.save_tasks) {
+        window.pywebview.api.save_tasks(tasks).catch(err => {
+          console.warn('保存到文件失败', err);
+        });
+        return;
+      }
+
+      // 浏览器回退
       localStorage.setItem(STORAGE_KEY, JSON.stringify(tasks));
     }
 
@@ -783,9 +841,9 @@
       });
     }
 
-    function init() {
+    async function init() {
       initTailwind();
-      loadTasks();
+      await loadTasks();
       initFilters();
       initDateDefault();
       
