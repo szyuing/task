@@ -165,8 +165,8 @@
         <div class="flex gap-2 items-end">
           <!-- Deadline -->
           <div class="flex-1 min-w-0">
-            <label class="block text-[10px] font-medium text-slate-500 mb-0.5 px-0.5">DDL</label>
-            <input id="task-deadline" type="date" 
+            <label class="block text-[10px] font-medium text-slate-500 mb-0.5 px-0.5">DDL时间</label>
+            <input id="task-deadline" type="datetime-local" 
                    class="w-full px-2 py-1.5 border border-slate-200 focus:border-indigo-400 focus:ring-1 focus:ring-indigo-200 rounded-lg text-xs outline-none text-slate-700">
           </div>
           
@@ -322,20 +322,28 @@
             return;
           }
 
-          // 首次使用：生成示例任务
-          const today = new Date();
+          // 首次使用：生成示例任务（带分钟）
+          const now = new Date();
+          now.setHours(now.getHours() + 2);
+          const y = now.getFullYear();
+          const m = String(now.getMonth() + 1).padStart(2, '0');
+          const d = String(now.getDate()).padStart(2, '0');
+          const h = String(now.getHours()).padStart(2, '0');
+          const min = String(now.getMinutes()).padStart(2, '0');
+          const sampleTime = `${y}-${m}-${d}T${h}:${min}`;
+
           tasks = [
             {
               id: generateId(),
               title: '写周报',
-              deadline: today.toISOString().split('T')[0],
+              deadline: sampleTime,
               recurring: false,
               completed: false
             },
             {
               id: generateId(),
               title: '喝水 2000ml',
-              deadline: today.toISOString().split('T')[0],
+              deadline: sampleTime,
               recurring: true,
               completed: false
             }
@@ -357,19 +365,27 @@
         }
       } else {
         // First time sample tasks (浏览器模式)
-        const today = new Date();
+        const now = new Date();
+        now.setHours(now.getHours() + 2);
+        const y = now.getFullYear();
+        const m = String(now.getMonth() + 1).padStart(2, '0');
+        const d = String(now.getDate()).padStart(2, '0');
+        const h = String(now.getHours()).padStart(2, '0');
+        const min = String(now.getMinutes()).padStart(2, '0');
+        const sampleTime = `${y}-${m}-${d}T${h}:${min}`;
+
         tasks = [
           {
             id: generateId(),
             title: '写周报',
-            deadline: today.toISOString().split('T')[0],
+            deadline: sampleTime,
             recurring: false,
             completed: false
           },
           {
             id: generateId(),
             title: '喝水 2000ml',
-            deadline: today.toISOString().split('T')[0],
+            deadline: sampleTime,
             recurring: true,
             completed: false
           }
@@ -395,37 +411,93 @@
       return 't_' + Date.now().toString(36) + Math.random().toString(36).slice(2);
     }
 
-    function getTodayStr() {
+    function getNowStr() {
+      // 返回本地时间 YYYY-MM-DDTHH:MM （避免 UTC 偏移）
       const d = new Date();
-      return d.toISOString().split('T')[0];
+      const y = d.getFullYear();
+      const m = String(d.getMonth() + 1).padStart(2, '0');
+      const day = String(d.getDate()).padStart(2, '0');
+      const h = String(d.getHours()).padStart(2, '0');
+      const min = String(d.getMinutes()).padStart(2, '0');
+      return `${y}-${m}-${day}T${h}:${min}`;
+    }
+
+    function getTodayStr() {
+      return getNowStr().split('T')[0];
     }
 
     function getTomorrowStr() {
       const d = new Date();
       d.setDate(d.getDate() + 1);
-      return d.toISOString().split('T')[0];
+      const y = d.getFullYear();
+      const m = String(d.getMonth() + 1).padStart(2, '0');
+      const day = String(d.getDate()).padStart(2, '0');
+      return `${y}-${m}-${day}`;
+    }
+
+    function addDaysToDeadline(deadlineStr, days) {
+      // 支持 "2026-06-18T14:30" 或纯日期
+      if (!deadlineStr) return getTomorrowStr() + 'T23:59';
+      const [datePart, timePart] = deadlineStr.split('T');
+      const d = dateStrToDate(datePart);
+      d.setDate(d.getDate() + days);
+      const y = d.getFullYear();
+      const m = String(d.getMonth() + 1).padStart(2, '0');
+      const dd = String(d.getDate()).padStart(2, '0');
+      const t = timePart || '23:59';
+      return `${y}-${m}-${dd}T${t}`;
     }
 
     function formatDate(dateStr) {
-      const d = new Date(dateStr + 'T00:00:00');
+      if (!dateStr) return '';
+      const [datePart, timePart] = dateStr.split('T');
+      const d = dateStrToDate(datePart);
       const month = d.getMonth() + 1;
       const day = d.getDate();
-      return `${month}月${day}日`;
+      let result = `${month}月${day}日`;
+      if (timePart) {
+        result += ` ${timePart}`;
+      }
+      return result;
     }
 
     function getRelativeLabel(task) {
-      const todayStr = getTodayStr();
-      const today = dateStrToDate(todayStr);
-      const due = dateStrToDate(task.deadline);
-
-      if (task.deadline < todayStr) {
-        const diff = Math.floor((today - due) / (1000 * 60 * 60 * 24));
-        return { text: `逾期${diff}天`, color: 'text-red-600 bg-red-100' };
-      } else if (task.deadline === todayStr) {
-        return { text: '今日到期', color: 'text-amber-600 bg-amber-100' };
+      const now = new Date();
+      let due;
+      if (task.deadline.includes('T')) {
+        const [dPart, tPart] = task.deadline.split('T');
+        const [y, m, dd] = dPart.split('-').map(Number);
+        const [hh, mm] = (tPart || '23:59').split(':').map(Number);
+        due = new Date(y, m - 1, dd, hh, mm);
       } else {
-        const diff = Math.floor((due - today) / (1000 * 60 * 60 * 24));
-        return { text: `${diff}天后`, color: 'text-emerald-600 bg-emerald-100' };
+        due = dateStrToDate(task.deadline);
+      }
+
+      const diffMs = due - now;
+      const diffDays = Math.floor(diffMs / (1000 * 60 * 60 * 24));
+      const absDays = Math.abs(diffDays);
+      const diffHours = Math.floor(Math.abs(diffMs) / (1000 * 60 * 60));
+      const diffMins = Math.floor(Math.abs(diffMs) / (1000 * 60));
+
+      if (diffMs < 0) {
+        // 逾期
+        if (absDays >= 1) {
+          return { text: `逾期${absDays}天`, color: 'text-red-600 bg-red-100' };
+        } else if (diffHours >= 1) {
+          return { text: `逾期${diffHours}小时`, color: 'text-red-600 bg-red-100' };
+        } else {
+          return { text: `逾期${diffMins}分钟`, color: 'text-red-600 bg-red-100' };
+        }
+      } else if (diffDays === 0) {
+        if (diffHours >= 1) {
+          return { text: `${diffHours}小时后`, color: 'text-amber-600 bg-amber-100' };
+        } else if (diffMins > 0) {
+          return { text: `${diffMins}分钟后`, color: 'text-amber-600 bg-amber-100' };
+        } else {
+          return { text: '即将到期', color: 'text-amber-600 bg-amber-100' };
+        }
+      } else {
+        return { text: `${diffDays}天后`, color: 'text-emerald-600 bg-emerald-100' };
       }
     }
 
@@ -466,11 +538,16 @@
         filtered = filtered.filter(t => t.title.toLowerCase().includes(q));
       }
 
-      // Apply filter
+      // Apply filter (support datetime)
       if (currentFilter === 'today') {
-        filtered = filtered.filter(t => t.deadline === today);
+        const todayDate = today; // YYYY-MM-DD
+        filtered = filtered.filter(t => {
+          const d = t.deadline.split('T')[0];
+          return d === todayDate;
+        });
       } else if (currentFilter === 'overdue') {
-        filtered = filtered.filter(t => t.deadline < today);
+        const nowStr = getNowStr();
+        filtered = filtered.filter(t => t.deadline < nowStr);
       } else if (currentFilter === 'recurring') {
         filtered = filtered.filter(t => t.recurring);
       }
@@ -626,11 +703,10 @@
       const task = tasks[idx];
       
       if (task.recurring) {
-        // “完成今日”逻辑：
-        // - 点击一次即完成“今天”的那一次实例
-        // - 无论原来是今天还是逾期，都直接设置到明天
-        const wasOverdue = task.deadline < getTodayStr();
-        task.deadline = getTomorrowStr();
+        // “完成今日”逻辑（支持分钟）：
+        // 保持原时间，只把日期 +1 天
+        const wasOverdue = task.deadline < getNowStr();
+        task.deadline = addDaysToDeadline(task.deadline, 1);
         showToast(wasOverdue ? '已补做今日，DDL 更新为明天' : '今日已完成，DDL 已更新为明天', 'success');
       } else {
         task.completed = true;
@@ -823,13 +899,19 @@
     }
 
     function initDateDefault() {
-      // Default the date picker to today
+      // Default the datetime picker to now + 2 hours
       const dateInput = document.getElementById('task-deadline');
-      const today = getTodayStr();
       
       // Only set if empty
       if (!dateInput.value) {
-        dateInput.value = today;
+        const now = new Date();
+        now.setHours(now.getHours() + 2);
+        const y = now.getFullYear();
+        const m = String(now.getMonth() + 1).padStart(2, '0');
+        const d = String(now.getDate()).padStart(2, '0');
+        const h = String(now.getHours()).padStart(2, '0');
+        const min = String(now.getMinutes()).padStart(2, '0');
+        dateInput.value = `${y}-${m}-${d}T${h}:${min}`;
       }
       
       // Also allow pressing Enter in title to submit
