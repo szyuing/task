@@ -437,19 +437,6 @@
       return `${y}-${m}-${day}`;
     }
 
-    function addDaysToDeadline(deadlineStr, days) {
-      // 支持 "2026-06-18T14:30" 或纯日期
-      if (!deadlineStr) return getTomorrowStr() + 'T23:59';
-      const [datePart, timePart] = deadlineStr.split('T');
-      const d = dateStrToDate(datePart);
-      d.setDate(d.getDate() + days);
-      const y = d.getFullYear();
-      const m = String(d.getMonth() + 1).padStart(2, '0');
-      const dd = String(d.getDate()).padStart(2, '0');
-      const t = timePart || '23:59';
-      return `${y}-${m}-${dd}T${t}`;
-    }
-
     function formatDate(dateStr) {
       if (!dateStr) return '';
       const [datePart, timePart] = dateStr.split('T');
@@ -509,13 +496,13 @@
       return new Date(y, m - 1, d);
     }
 
-    // 节假日数据（可扩展，支持更多年份）
+    // 节假日数据（2026 中国主要法定节假日，基于公开信息）
     const HOLIDAYS = {
-      // 2026 示例（可根据实际调整）
+      // 元旦
       '2026-01-01': '元旦',
       '2026-01-02': '元旦',
       '2026-01-03': '元旦',
-      // 春节（示例，实际以官方为准）
+      // 春节（以官方为准，此为常见范围）
       '2026-02-16': '春节',
       '2026-02-17': '春节',
       '2026-02-18': '春节',
@@ -529,10 +516,15 @@
       '2026-05-03': '劳动节',
       '2026-05-04': '劳动节',
       '2026-05-05': '劳动节',
-      // 端午节（示例）
+      // 端午节 2026-06-19 ~ 21
       '2026-06-19': '端午节',
       '2026-06-20': '端午节',
-      // 国庆节
+      '2026-06-21': '端午节',
+      // 中秋节 2026-09-25 ~ 27
+      '2026-09-25': '中秋节',
+      '2026-09-26': '中秋节',
+      '2026-09-27': '中秋节',
+      // 国庆节 2026-10-01 ~ 07
       '2026-10-01': '国庆节',
       '2026-10-02': '国庆节',
       '2026-10-03': '国庆节',
@@ -540,7 +532,6 @@
       '2026-10-05': '国庆节',
       '2026-10-06': '国庆节',
       '2026-10-07': '国庆节',
-      // 中秋等可继续添加
     };
 
     function getHolidayName(dateStr) {
@@ -765,10 +756,13 @@
       const task = tasks[idx];
       
       if (task.recurring) {
-        // “完成今日”逻辑（支持分钟）：
-        // 保持原时间，只把日期 +1 天
+        // 每日重复任务的“完成今日”逻辑：
+        // 标记今天已完成，将下一次 DDL 推进到“明天”（基于当前日期），保留原时间
+        // 无论是否逾期，都直接设置到明天，避免多次点击追赶
         const wasOverdue = task.deadline < getNowStr();
-        task.deadline = addDaysToDeadline(task.deadline, 1);
+        const timePart = task.deadline.includes('T') ? task.deadline.split('T')[1] : '23:59';
+        const tomorrow = getTomorrowStr();
+        task.deadline = `${tomorrow}T${timePart}`;
         showToast(wasOverdue ? '已补做今日，DDL 更新为明天' : '今日已完成，DDL 已更新为明天', 'success');
       } else {
         task.completed = true;
