@@ -914,8 +914,29 @@
       }
     }
 
-    // Boot
-    window.onload = init;
+    // Boot - properly wait for pywebview API (important for initial data load)
+    function startApp() {
+      // Call async init
+      init();
+    }
+
+    // Use pywebviewready event for reliable API access on startup
+    if (window.pywebview && window.pywebview.api) {
+      // Already ready (rare)
+      startApp();
+    } else {
+      window.addEventListener('pywebviewready', startApp);
+    }
+
+    // Fallback for browser testing (no pywebview) or if event missed
+    window.addEventListener('load', function() {
+      // Only if no pywebview API detected yet
+      setTimeout(function() {
+        if (!window.pywebview || !window.pywebview.api) {
+          startApp();
+        }
+      }, 50);
+    });
   </script>
 </body>
 </html>
